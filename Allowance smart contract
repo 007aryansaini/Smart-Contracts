@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Allowance{
+
+
+    address  public owner;
+    mapping(address => uint) public allowances;
+
+    constructor(){
+          owner == msg.sender;
+    }
+
+    event MoneySent(string Description , address To , uint amount);
+
+    modifier onlyOwner{
+        require(msg.sender == owner);
+        _;
+    }
+
+    modifier ownerOrAllowance(uint _amount) {
+        require(msg.sender == owner || allowances[msg.sender] >= _amount , "Not Allowed.");
+        _;
+    }
+
+    receive() payable external{
+
+    }
+
+    function checkBalance() public view returns(uint){
+
+        return address(this).balance;
+    }
+
+    function addAllowances(address _to , uint _amount) public onlyOwner{
+        allowances[_to] = _amount;
+    }
+
+
+    function withdrawlMoney(string memory _description , address payable _to , uint _amount)public ownerOrAllowance(_amount) {
+
+         require( address(this).balance >= _amount , "Insufficient funds...");
+
+         if( msg.sender != owner){
+             allowances[msg.sender] -= _amount;
+         }
+
+         emit MoneySent(_description , _to , _amount);
+         _to.transfer(_amount);
+
+             
+    }
+    
+}
