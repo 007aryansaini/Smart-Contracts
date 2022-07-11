@@ -1,0 +1,105 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract CrwodFuncding{
+
+address payable auctioneer;
+address public highestBidder;
+uint public HighestBid;
+uint public minBidAmount = 1 ether;
+uint stBlock;
+uint endBlock;
+
+enum Auc_State{ started , running , ended , cancelled }
+
+mapping(address => uint ) bidders;
+
+Auc_State state;
+
+
+constructor(uint endTimeInHour, uint _minBidAmount){
+
+    auctioneer =payable( msg.sender);
+    minBidAmount = _minBidAmount;
+    stBlock = block.number;
+    endBlock = stBlock + (240 * endTimeInHour);
+    state = Auc_State.running;
+    
+}
+
+event Winner(address HighestBidder , uint Bid);
+event HighestBidderChanged(address HighestBidder , uint Bid);
+
+
+modifier onlyOwner{
+    require( msg.sender == auctioneer , "You are not the auctioneer");
+    _;
+}
+
+modifier notOwner{
+    require( msg.sender != auctioneer , "You are the auctioneer");
+    _;
+}
+
+modifier started{
+    require ( block.number >= stBlock  ||  state == Auc_State.ended);
+    _;
+}
+
+modifier beforeEnd{
+    require ( block.number < endBlock || state == Auc_State.ended);
+    _;
+}
+
+function cancelAuction() public onlyOwner {
+     state = Auc_State.cancelled;
+     
+     auctioneer.transfer(HighestBid);
+}
+
+
+function Bid() public payable notOwner started beforeEnd {
+      require( state == Auc_State.running , "Auction was ended by the auctioneer.");
+      require(msg.value >= minBidAmount && msg.value > HighestBid, "Bid is less than the minimum bidding value.");
+
+
+    if(HighestBid != 0){
+         bidders[highestBidder] += HighestBid;
+        
+    }
+
+
+    highestBidder = msg.sender;
+    HighestBid = msg.value;
+    emit HighestBidderChanged( highestBidder , HighestBid );
+
+
+} 
+
+
+function withdrwal() public notOwner  {
+
+    require( state == Auc_State.ended || state == Auc_State.cancelled, "Auction is still running");
+    require ( msg.sender != highestBidder , "You cannot avail refund as you are the Highest Bidder.");
+    uint amount = bidders[msg.sender];
+
+    if( amount > 0){
+        bidders[msg.sender] = 0;
+    }
+
+    if( !payable(msg.sender).send(amount)){
+         bidders[msg.sender] = amount;
+    }
+
+
+}
+
+function EndAuction() public onlyOwner started beforeEnd {
+             
+            
+              state = Auc_State.ended;
+              emit Winner(highestBidder , HighestBid);
+
+              auctioneer.transfer(HighestBid);
+}
+}
