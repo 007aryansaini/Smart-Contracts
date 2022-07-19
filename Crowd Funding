@@ -1,0 +1,125 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract CrwodFunding{
+        
+        address public admin;
+        uint public goal;
+        uint public amountRaised;
+        uint public deadline;
+        uint public noOfContributors;
+        uint public minimumContribution;
+        mapping ( address => uint ) public contributors;
+
+        struct Request{
+               string description;
+               address payable reciepient;
+               uint value;
+               bool completed;
+               uint noOfVoters;
+               mapping ( address => bool ) voters;
+
+        }
+
+        mapping (uint => Request ) public requests;
+        uint public numRequest;
+        
+
+        event contributeEvent(address sender , uint value);
+        event createRequestEvent(string description , address receipient , uint value);
+        event makePaymentEvent( address reciepient , uint value);
+
+
+
+        constructor(uint _goal , uint _deadline , uint _minNoOfContribution){
+                goal = _goal;
+                deadline = block.timestamp + _deadline;
+                admin = msg.sender;
+                minimumContribution = _minNoOfContribution;
+        }
+
+
+        function contribute() public payable {
+                require( block.timestamp <= deadline , "You cannot contribute now");
+                uint curAmount = contributors[msg.sender] + msg.value;
+
+                require( curAmount >= minimumContribution, "Amount is less than the current ");
+
+                if( contributors[msg.sender] == 0 ){
+                      noOfContributors++;
+                }
+
+                contributors[msg.sender] += msg.value;
+                amountRaised += msg.value;
+                emit contributeEvent(msg.sender , msg.value);
+        }
+        
+
+         function getRefund() public {
+        require(block.timestamp > deadline, "Deadline has not passed.");
+        require(amountRaised < goal, "The goal was met");
+        require(contributors[msg.sender] > 0);
+        
+        address payable recipient = payable(msg.sender);
+        uint value = contributors[msg.sender];
+        
+        
+        contributors[msg.sender] = 0;  
+        recipient.transfer(value);
+       
+    }
+
+        receive() payable external {
+            contribute();
+        }
+
+        function getBalance() public view returns(uint){
+            return address(this).balance;
+        }
+
+        modifier onlyAdmin{
+            require( msg.sender == admin , "You cannot access this function...");
+            _;
+        }
+
+
+       function createRequest( string memory _description , address payable _receiver , uint _value) public onlyAdmin {
+           Request storage newRequest = requests[numRequest];
+           numRequest++;
+
+           newRequest.description = _description;
+           newRequest.reciepient= _receiver;
+           newRequest.value = _value;
+           newRequest.completed = false;
+           newRequest.noOfVoters = 0;
+
+              emit createRequestEvent(_description , _receiver , _value);
+       }
+
+       function voting(uint _RequestNo) public {
+             require( contributors[msg.sender] > 0 , "Only contributors can vote");
+             Request storage thisRequest = requests[_RequestNo];
+
+             require(thisRequest.voters[msg.sender] == false , "You have already votes");
+             thisRequest.voters[msg.sender] = true;
+              thisRequest.noOfVoters++;
+
+       }
+
+       function makePayment(uint _RequestNo) public onlyAdmin {
+              require(amountRaised >= goal , "Goal not achieved");
+              Request storage thisRequest = requests[_RequestNo];
+
+              require( thisRequest.completed == false , "Request has been completed");
+
+              require( thisRequest.noOfVoters > noOfContributors/2);
+               thisRequest.reciepient.transfer(thisRequest.value);
+               thisRequest.completed = true;
+           
+
+           emit makePaymentEvent( thisRequest.reciepient , thisRequest.value );
+       }
+
+
+
+}
