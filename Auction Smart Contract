@@ -1,105 +1,111 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract CrwodFuncding{
+contract AuctionCreator{
+     Auction[] public auctions;
 
-address payable auctioneer;
-address public highestBidder;
-uint public HighestBid;
-uint public minBidAmount = 1 ether;
-uint stBlock;
-uint endBlock;
-
-enum Auc_State{ started , running , ended , cancelled }
-
-mapping(address => uint ) bidders;
-
-Auc_State state;
-
-
-constructor(uint endTimeInHour, uint _minBidAmount){
-
-    auctioneer =payable( msg.sender);
-    minBidAmount = _minBidAmount;
-    stBlock = block.number;
-    endBlock = stBlock + (240 * endTimeInHour);
-    state = Auc_State.running;
-    
+     function createAuction() public {
+          Auction newAuction = new Auction(msg.sender);
+          auctions.push(newAuction);
+     }
 }
 
-event Winner(address HighestBidder , uint Bid);
-event HighestBidderChanged(address HighestBidder , uint Bid);
+contract Auction{
+    address payable public owner;
+    uint public startBlock;
+    uint public endblock;
+    string public ipfsHash;
+    mapping(address => uint ) public bids;
 
+    uint public HighestBindingBid;
+    address payable public HighestBidder;
 
-modifier onlyOwner{
-    require( msg.sender == auctioneer , "You are not the auctioneer");
-    _;
-}
+    enum state{started , running , ended , cancelled}
 
-modifier notOwner{
-    require( msg.sender != auctioneer , "You are the auctioneer");
-    _;
-}
+    state auctionState;
+    uint bidIncreament;
 
-modifier started{
-    require ( block.number >= stBlock  ||  state == Auc_State.ended);
-    _;
-}
+    constructor(address _owner){
+        owner = payable(_owner);
+        startBlock = block.number;
+        endblock = startBlock + 5760;
+        ipfsHash = "";
+        auctionState = state.running;
+        bidIncreament = 1 ether;
 
-modifier beforeEnd{
-    require ( block.number < endBlock || state == Auc_State.ended);
-    _;
-}
+    }
 
-function cancelAuction() public onlyOwner {
-     state = Auc_State.cancelled;
-     
-     auctioneer.transfer(HighestBid);
-}
+    modifier onlyOwner{
+        require(msg.sender == owner);
+        _;
+    }
+    modifier notOwner{
+        require(msg.sender != owner);
+        _;
+    }
+    modifier afterStart{
+        require( block.number >= startBlock);
+        _;
+    }
 
+    modifier beforeEnd{
+        require(block.number <= endblock);
+        _;
+    }
 
-function Bid() public payable notOwner started beforeEnd {
-      require( state == Auc_State.running , "Auction was ended by the auctioneer.");
-      require(msg.value >= minBidAmount && msg.value > HighestBid, "Bid is less than the minimum bidding value.");
+    function min(uint _a , uint _b) private pure returns(uint){
+         if( _a <= _b){
+             return _a;
+         }else {
+             return _b;
+         }
+    }
 
+    function cencelAuction() public onlyOwner{
+        auctionState = state.cancelled;
+    }
 
-    if(HighestBid != 0){
-         bidders[highestBidder] += HighestBid;
+    function placeBid() public payable notOwner afterStart beforeEnd {
+        require( auctionState == state.running , "Auction ended.");
         
+        uint currentBid = bids[msg.sender] + msg.value;
+
+        require(currentBid > HighestBindingBid );
+
+        bids[msg.sender] = currentBid;
+
+        if( currentBid <= HighestBindingBid ){
+                 HighestBindingBid = min(currentBid + bidIncreament , HighestBindingBid);
+        }else{
+                HighestBindingBid = min( currentBid , HighestBindingBid + bidIncreament);
+                HighestBidder = payable(msg.sender);
+        }
+
+    }
+
+    function withdrawFunds() public {
+           require( auctionState == state.cancelled || block.number > endblock);
+           require ( msg.sender == owner || bids[msg.sender] > 0);
+
+            uint fund;
+            address payable receipent;
+
+            if( msg.sender == owner){
+                   fund = HighestBindingBid;
+                   receipent = owner;
+            }else{
+                   if( msg.sender == HighestBidder ){
+                          receipent = HighestBidder;
+                          fund = bids[msg.sender] - HighestBindingBid;
+                   }else{
+                          receipent = payable(msg.sender);
+                          fund = bids[msg.sender];
+                   }
+            }
+
+            bids[msg.sender] = 0;
+            receipent.transfer(fund);
     }
 
 
-    highestBidder = msg.sender;
-    HighestBid = msg.value;
-    emit HighestBidderChanged( highestBidder , HighestBid );
-
-
-} 
-
-
-function withdrwal() public notOwner  {
-
-    require( state == Auc_State.ended || state == Auc_State.cancelled, "Auction is still running");
-    require ( msg.sender != highestBidder , "You cannot avail refund as you are the Highest Bidder.");
-    uint amount = bidders[msg.sender];
-
-    if( amount > 0){
-        bidders[msg.sender] = 0;
-    }
-
-    if( !payable(msg.sender).send(amount)){
-         bidders[msg.sender] = amount;
-    }
-
-
-}
-
-function EndAuction() public onlyOwner started beforeEnd {
-             
-            
-              state = Auc_State.ended;
-              emit Winner(highestBidder , HighestBid);
-
-              auctioneer.transfer(HighestBid);
-}
 }
