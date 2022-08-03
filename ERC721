@@ -1,2 +1,5 @@
 A token is the representation of something in blockchain.
 This something can be anythin money, time, service, shares in a company etc.
+
+--> Fungible : The quality of an asses such that it can be exchanged with anoother asses of same type. EG: 5 rupees note.
+--> Non-Fungible : The quality of an asset such that they are similar but not exchangeable.
