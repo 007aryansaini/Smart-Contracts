@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.17;
+
+contract myEtherWallet {
+      /*
+         mapping ( address => balance )
+         owner 
+         
+         end cases :
+           check time
+           check amount 
+           withdrawl pattern
+       */
+
+    
+       mapping( address => uint256 )  balances;
+       mapping ( address => uint256) public time;
+  
+       
+
+        function deposite() external  payable {
+                require( msg.value >= 1 ether , "Cannot store less than 1 ether");
+                require(balances[msg.sender] <  1 ether , "Can deposite only once");
+
+                time[msg.sender] = block.number;
+                balances[msg.sender] = msg.value;
+        }
+
+        function contractBalance() external view returns(uint256){
+            return address(this).balance;
+        }
+       
+       // 1 year = 2102400 
+        function withdraw() external {
+             require(time[msg.sender] + 2102400 < block.number , "Cannot withdraw before 1 year");
+
+             uint256 amount = getBalance(msg.sender);
+             balances[msg.sender] = 0;
+             payable(msg.sender).transfer(amount);
+        }
+
+
+        function getBalance(address _addr) public view returns(uint256){
+            return balances[_addr];
+        }
+       
+
+        function blockNum() external view returns(uint){
+             return block.number;
+        }
+
+         
+}
